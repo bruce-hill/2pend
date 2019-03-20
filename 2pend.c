@@ -7,8 +7,6 @@
 #include <unistd.h>
 #include <math.h>
 
-#define HISTORY_LEN 8
-
 typedef struct {
     double a, p;
 } pendulum_t;
@@ -43,7 +41,18 @@ static state_t step(state_t state, state_t derivative, double dt)
     return next;
 }
 
-static void draw(state_t state, int color)
+static inline void draw_pix(double x, double y, int W, int H, double *prev)
+{
+    double b = sqrt(2*((x-floor(x+.5))*(x-floor(x+.5)) + (y-floor(y+.5))*(y-floor(y+.5))));
+    int ix = (int)x, iy = (int)y;
+    if (b > prev[iy*W+ix] && b > .1) {
+        prev[iy*W+ix] = b;
+        int color = color_ramp[(int)(sizeof(color_ramp)/sizeof(int) * b)];
+        tb_change_cell(ix, iy, ' ', 0, color);
+    }
+}
+
+static void draw(state_t state)
 {
     // TODO: properly walk along cells
     int W = tb_width(), H = tb_height();
@@ -52,30 +61,16 @@ static void draw(state_t state, int color)
     double x = W/2, y = H/2;
     double step = 0.25;
     for (double p = 0; p <= len*L1; p += step) {
-        double b = (sqrt(2*((x-floor(x+.5))*(x-floor(x+.5)) + (y-floor(y+.5))*(y-floor(y+.5)))));
-        if (b > brightness[(int)y*W+(int)x]) brightness[(int)y*W+(int)x] = b;
-        b = (sqrt(2*((x+1.-floor(x+1.5))*(x+1.-floor(x+1.5)) + (y-floor(y+.5))*(y-floor(y+.5)))));
-        if (b > brightness[(int)y*W+(int)x+1]) brightness[(int)y*W+(int)x+1] = b;
-        //tb_change_cell((int)x, (int)y, ' ', 0, color);
+        draw_pix(x, y, W, H, brightness);
+        draw_pix(x+1.0, y, W, H, brightness);
         x += step*cos(state.p1.a + M_PI/2)*2;
         y += step*sin(state.p1.a + M_PI/2);
     }
     for (double p = 0; p <= len*L2; p += step) {
-        double b = (sqrt(2*((x-floor(x+.5))*(x-floor(x+.5)) + (y-floor(y+.5))*(y-floor(y+.5)))));
-        if (b > brightness[(int)y*W+(int)x]) brightness[(int)y*W+(int)x] = b;
-        b = (sqrt(2*((x+1.-floor(x+1.5))*(x+1.-floor(x+1.5)) + (y-floor(y+.5))*(y-floor(y+.5)))));
-        if (b > brightness[(int)y*W+(int)x+1]) brightness[(int)y*W+(int)x+1] = b;
-        //tb_change_cell((int)x, (int)y, ' ', 0, color);
+        draw_pix(x, y, W, H, brightness);
+        draw_pix(x+1.0, y, W, H, brightness);
         x += step*cos(state.p2.a + M_PI/2)*2;
         y += step*sin(state.p2.a + M_PI/2);
-    }
-
-    for (int y=0; y<H; y++) for (int x=0; x<W; x++) {
-        double b = brightness[y*W+x];
-        if (b > 0) {
-            color = color_ramp[(int)(sizeof(color_ramp)/sizeof(int) * b)];
-            tb_change_cell((int)x, (int)y, ' ', 0, color);
-        }
     }
     free(brightness);
 }
@@ -90,16 +85,12 @@ int main(int argc, char **argv) {
     tb_select_output_mode(TB_OUTPUT_256);
 
     state_t state;
-    state_t history[HISTORY_LEN];
 
   randomize:
     state.p1.a = M_PI/2 + M_PI*(double)rand()/RAND_MAX;
     state.p2.a = M_PI/2 + M_PI*(double)rand()/RAND_MAX;
     state.p1.p = 0;
     state.p2.p = 0;
-    for (int i=0; i<HISTORY_LEN; i++) {
-        history[i] = state;
-    }
 
     while (1) {
         tb_clear();
@@ -116,18 +107,7 @@ int main(int argc, char **argv) {
             state.p1.p += dt/6.*(k1.p1.p + 2.*k2.p1.p + 2.*k3.p1.p + k4.p1.p);
             state.p2.p += dt/6.*(k1.p2.p + 2.*k2.p2.p + 2.*k3.p2.p + k4.p2.p);
         }
-        for (int i=0; i<HISTORY_LEN-1; i++) {
-            history[i] = history[i+1];
-        }
-        history[HISTORY_LEN-1] = state;
-        /*
-        for (int i=0; i<HISTORY_LEN; i++) {
-            //draw(history[i], color_ramp[((i+1)*(sizeof(color_ramp)/sizeof(int)))/(HISTORY_LEN+1)]);
-            draw(history[i], color_ramp[((i+1)*(sizeof(color_ramp)/sizeof(int)/2))/(HISTORY_LEN+1)]);
-        }
-        */
-        draw(state, 231);
-        //draw(state, 7);
+        draw(state);
         tb_present();
         usleep(60000);
         struct tb_event ev;
