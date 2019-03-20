@@ -24,8 +24,7 @@ install: $(NAME)
 		prefix="/usr/local"; \
 	fi; \
 	mkdir -pv $$prefix/bin $$prefix/share/man/man1 \
-	&& cp -v $(NAME) $$prefix/bin/ \
-	&& cp -v doc/$(NAME).1 $$prefix/share/man/man1/
+	&& cp -v $(NAME) $$prefix/bin/
 
 uninstall:
 	@prefix="$(PREFIX)"; \
@@ -36,5 +35,5 @@ uninstall:
 		prefix="/usr/local"; \
 	fi; \
 	echo "Deleting..."; \
-	rm -rvf $$prefix/bin/$(NAME) $$prefix/share/man/man1/$(NAME).1
+	rm -rvf $$prefix/bin/$(NAME)
 
