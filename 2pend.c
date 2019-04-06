@@ -87,8 +87,8 @@ int main(int argc, char **argv) {
     state_t state;
 
   randomize:
-    state.p1.a = M_PI/2 + M_PI*(double)rand()/RAND_MAX;
-    state.p2.a = M_PI/2 + M_PI*(double)rand()/RAND_MAX;
+    state.p1.a = M_PI*7/8 + M_PI/4*(double)rand()/RAND_MAX;
+    state.p2.a = M_PI*7/8 + M_PI/4*(double)rand()/RAND_MAX;
     state.p1.p = 0;
     state.p2.p = 0;
 
