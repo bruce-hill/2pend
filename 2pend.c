@@ -1,11 +1,15 @@
 // A double pendulum simulator by Bruce Hill
 // Released under the MIT license, see LICENSE for details.
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <termbox.h>
-#include <unistd.h>
+#include <fcntl.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ioctl.h>
+#include <termios.h>
+#include <unistd.h>
+
+#include "bterm.h"
 
 typedef struct {
     double a, p;
@@ -16,9 +20,13 @@ typedef struct {
 } state_t;
 
 static const double M1 = 1.0, M2 = 1.0, G = 9.80, L1 = .5, L2 = .5;
+struct winsize wsize = {0};
 
 const int color_ramp[] = {16,232,233,234,235,236,237,238,239,240,241,242,243,244,245,246,
     247,248,249,250,251,252,253,254,255,231,231,231,231,231};
+
+static FILE *tty_out = NULL;
+int ttyin_fd = 0;
 
 static state_t get_derivative(state_t state)
 {
@@ -48,14 +56,14 @@ static inline void draw_pix(double x, double y, int W, int H, double *prev)
     if (b > prev[iy*W+ix] && b > .1) {
         prev[iy*W+ix] = b;
         int color = color_ramp[(int)(sizeof(color_ramp)/sizeof(int) * b)];
-        tb_change_cell(ix, iy, ' ', 0, color);
+        fprintf(tty_out, "\033[%d;%dH\033[48;5;%dm \033[0m", iy+1, ix+1, color);
     }
 }
 
 static void draw(state_t state)
 {
     // TODO: properly walk along cells
-    int W = tb_width(), H = tb_height();
+    int W = wsize.ws_col, H = wsize.ws_row;
     double *brightness = calloc(W*H, sizeof(double));
     double len = W/2 > H ? H/2 : (W/2)/2;
     double x = W/2, y = H/2;
@@ -75,14 +83,23 @@ static void draw(state_t state)
     free(brightness);
 }
 
-int main(int argc, char **argv) {
-    int ret = tb_init();
-    if (ret) {
-        fprintf(stderr, "tb_init() failed with error code %d\n", ret);
+int main(int argc, char **argv)
+{
+    int ret = 0;
+    ttyin_fd = open("/dev/tty", O_RDONLY | O_NONBLOCK);
+    tty_out = fopen("/dev/tty", "w");
+
+    struct termios orig_termios, termios;
+    tcgetattr(fileno(tty_out), &orig_termios);
+    memcpy(&termios, &orig_termios, sizeof(termios));
+    cfmakeraw(&termios);
+    termios.c_cc[VMIN] = 10;
+    termios.c_cc[VTIME] = 1;
+    if (tcsetattr(fileno(tty_out), TCSAFLUSH, &termios) == -1)
         return 1;
-    }
-    tb_select_input_mode(TB_INPUT_MOUSE);
-    tb_select_output_mode(TB_OUTPUT_256);
+
+    ioctl(STDOUT_FILENO, TIOCGWINSZ, &wsize);
+    fputs(T_OFF(T_SHOW_CURSOR) T_ON(T_ALT_SCREEN), tty_out);
 
     state_t state;
 
@@ -93,7 +110,6 @@ int main(int argc, char **argv) {
     state.p2.p = 0;
 
     while (1) {
-        tb_clear();
         const int steps = 5;
         double dt = (1./60.) / (double)steps;
         for (int i = 0; i < steps; i++) {
@@ -107,24 +123,22 @@ int main(int argc, char **argv) {
             state.p1.p += dt/6.*(k1.p1.p + 2.*k2.p1.p + 2.*k3.p1.p + k4.p1.p);
             state.p2.p += dt/6.*(k1.p2.p + 2.*k2.p2.p + 2.*k3.p2.p + k4.p2.p);
         }
+        fputs("\033[2J", tty_out);
         draw(state);
-        tb_present();
+        fflush(tty_out);
         usleep(60000);
-        struct tb_event ev;
-        while (tb_peek_event(&ev, 0)) {
-            switch (ev.type) {
-                case TB_EVENT_KEY:
-                    if (ev.key == TB_KEY_ESC && tb_peek_event(&ev, 50) == 0)
-                        goto done;
-                    else if (ev.ch == 'q')
-                        goto done;
-                    else if (ev.ch == 'r')
-                        goto randomize;
-                    break;
-            }
+        int key;
+        key = bgetkey(ttyin_fd, NULL, NULL);
+        switch (key) {
+            case KEY_CTRL_C: ret = 1; goto done;
+            case KEY_ESC: case 'q': goto done;
+            case 'r': goto randomize;
         }
     }
   done:
-    tb_shutdown();
-    return 0;
+    tcsetattr(fileno(tty_out), TCSAFLUSH, &orig_termios);
+    fputs(T_ON(T_SHOW_CURSOR) T_OFF(T_ALT_SCREEN), tty_out);
+    fclose(tty_out);
+    close(ttyin_fd);
+    return ret;
 }

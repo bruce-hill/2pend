@@ -7,12 +7,12 @@ NAME=2pend
 all: $(NAME)
 
 clean:
-	rm $(NAME)
+	rm -f $(NAME)
 
 run: $(NAME)
 	./$(NAME)
 
-$(NAME): $(NAME).c
+$(NAME): $(NAME).c bterm.h
 	$(CC) $(NAME).c $(LIBS) $(CFLAGS) -o $(NAME)
 
 install: $(NAME)
