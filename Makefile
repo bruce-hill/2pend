@@ -12,7 +12,7 @@ clean:
 run: $(NAME)
 	./$(NAME)
 
-$(NAME): $(NAME).c bterm.h
+$(NAME): $(NAME).c
 	$(CC) $(NAME).c $(LIBS) $(CFLAGS) -o $(NAME)
 
 install: $(NAME)

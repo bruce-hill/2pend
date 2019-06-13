@@ -9,8 +9,6 @@
 #include <termios.h>
 #include <unistd.h>
 
-#include "bterm.h"
-
 typedef struct {
     double a, p;
 } pendulum_t;
@@ -99,7 +97,7 @@ int main(int argc, char **argv)
         return 1;
 
     ioctl(STDOUT_FILENO, TIOCGWINSZ, &wsize);
-    fputs(T_OFF(T_SHOW_CURSOR) T_ON(T_ALT_SCREEN), tty_out);
+    fputs("\033[?25l\033[?1049h", tty_out);
 
     state_t state;
 
@@ -127,17 +125,24 @@ int main(int argc, char **argv)
         draw(state);
         fflush(tty_out);
         usleep(60000);
-        int key;
-        key = bgetkey(ttyin_fd, NULL, NULL);
-        switch (key) {
-            case KEY_CTRL_C: ret = 1; goto done;
-            case KEY_ESC: case 'q': goto done;
-            case 'r': goto randomize;
+        char ch;
+        if (read(ttyin_fd, &ch, 1) == 1) {
+            if (ch == '\3') {
+                ret = 1;
+                goto done;
+            } else if (ch == 'r') {
+                goto randomize;
+            } else if (ch == '\x1b') {
+                if (read(ttyin_fd, &ch, 1) != 1)
+                    goto done;
+            } else if (ch == 'q') {
+                goto done;
+            }
         }
     }
   done:
     tcsetattr(fileno(tty_out), TCSAFLUSH, &orig_termios);
-    fputs(T_ON(T_SHOW_CURSOR) T_OFF(T_ALT_SCREEN), tty_out);
+    fputs("\033[?25h\033[?1049l", tty_out);
     fclose(tty_out);
     close(ttyin_fd);
     return ret;
