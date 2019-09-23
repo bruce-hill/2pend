@@ -1,7 +1,7 @@
 PREFIX=
 CC=cc
 CFLAGS=-O3 -std=gnu99
-LIBS=-ltermbox -lm
+LIBS=-lm
 NAME=2pend
 
 all: $(NAME)
